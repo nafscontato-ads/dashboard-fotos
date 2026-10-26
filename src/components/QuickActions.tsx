@@ -167,3 +167,53 @@ export function QuickExpense({ ops, data, defaultOp, onClose, onSaved }: { ops: 
     </Modal>
   )
 }
+
+/** Gasto com anúncio de um dia, pra operação que ainda não puxa do Meta sozinha (Op 02). */
+export function AdSpend({ ops, data, defaultOp, onClose, onSaved }: { ops: Operation[]; data: Data; defaultOp?: string; onClose: () => void; onSaved: () => void }) {
+  const [opId, setOpId] = useState(defaultOp ?? ops[0]?.id ?? '')
+  const [day, setDay] = useState(yesterday())
+  const current = data.entries.find((x) => x.operation_id === opId && x.day === day)
+  const [amount, setAmount] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const shown = amount ?? fmt(current?.ad_spend)
+  const v = parseMoney(shown)
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    const r = await saveEntry(opId, day, { ad_spend: v }, !!current)
+    setBusy(false)
+    if (r.error) return setErr(r.error.message)
+    onSaved()
+  }
+
+  return (
+    <Modal title="Gasto com anúncio" onClose={onClose}>
+      <form onSubmit={save} className="space-y-3">
+        <div>
+          <label className="label">Operação</label>
+          <select className="input" value={opId} onChange={(e) => { setOpId(e.target.value); setAmount(null) }}>
+            {ops.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="label">Dia</label>
+            <input type="date" className="input" value={day} max={todayISO()} onChange={(e) => { setDay(e.target.value); setAmount(null) }} />
+          </div>
+          <div>
+            <label className="label">Valor gasto (sem imposto)</label>
+            <input autoFocus className="input text-right tabular-nums" inputMode="decimal" placeholder="0,00" value={shown} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+        </div>
+        <p className="text-xs text-zinc-500">
+          {dayLabel(day)} · use o valor "Valor usado" do Gerenciador do Meta. O imposto de 12,15% ({(v * 0.1215).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) entra sozinho.
+          {current ? ' Esse dia já tem valor: salvar troca pelo novo.' : ''}
+        </p>
+        {err && <p className="text-sm text-rose-600">{err}</p>}
+        <button className="btn-primary h-11 w-full" disabled={busy}>{busy ? 'Salvando…' : 'Salvar gasto'}</button>
+      </form>
+    </Modal>
+  )
+}

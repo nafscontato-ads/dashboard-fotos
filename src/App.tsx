@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import {
-  Boxes, CalendarDays, ChevronRight, ClipboardList, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Plug, Plus, Receipt,
+  BadgeDollarSign, Boxes, CalendarDays, ChevronRight, ClipboardList, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Plug, Plus, Receipt,
   RefreshCw, ShoppingBag, Sun,
 } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -11,7 +11,7 @@ import { ExpenseToggles, FilterCard, rangeFor, type FilterState } from './compon
 import Kpis, { ProductKpis } from './components/Kpis'
 import Login from './components/Login'
 import { ProductList, SalesByProduct } from './components/Products'
-import { DayClose, QuickExpense } from './components/QuickActions'
+import { AdSpend, DayClose, QuickExpense } from './components/QuickActions'
 import Sales from './components/Sales'
 import Settings from './components/Settings'
 import { Empty, Modal, Section, tone } from './components/ui'
@@ -73,6 +73,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
   const [settings, setSettings] = useState<string | null>(null)
   const [dayClose, setDayClose] = useState(false)
   const [quickExp, setQuickExp] = useState(false)
+  const [adSpend, setAdSpend] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
@@ -177,6 +178,12 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
     body = (
       <>
         <FilterCard title="Resumo" {...filterProps} />
+        {editableOps.length > 0 && (
+          <div className="grid grid-cols-2 gap-2.5">
+            <button className="btn-outline h-11 bg-white dark:bg-panel-dark" onClick={() => setAdSpend(true)}><BadgeDollarSign size={17} /> Gasto com anúncio</button>
+            <button className="btn-outline h-11 bg-white dark:bg-panel-dark" onClick={() => setQuickExp(true)}><Receipt size={17} /> Despesa</button>
+          </div>
+        )}
         {f.product === 'all' ? (
           <>
             <Kpis t={totals} showMine={showMine} saved={saved} onExpenses={() => go('despesas')} />
@@ -339,7 +346,9 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
       {actions && (
         <Modal title="O que você quer lançar?" onClose={() => setActions(false)}>
           <div className="space-y-2">
-            <ActionItem icon={<ClipboardList size={20} />} title="Balanço do dia" sub="Gasto do anúncio (Op 02 sem Meta), editor e despesas do dia"
+            <ActionItem icon={<BadgeDollarSign size={20} />} title="Gasto com anúncio" sub="Quanto gastou no Meta no dia (Op 02, que não puxa sozinha)"
+              onClick={() => { setActions(false); setAdSpend(true) }} />
+            <ActionItem icon={<ClipboardList size={20} />} title="Balanço do dia" sub="Gasto, editor e despesas do dia, de todas as operações"
               onClick={() => { setActions(false); setDayClose(true) }} />
             <ActionItem icon={<Receipt size={20} />} title="Despesa avulsa" sub="Zap Data, verificado ou outra despesa"
               onClick={() => { setActions(false); setQuickExp(true) }} />
@@ -354,6 +363,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
       {newOp && <NewOperation userId={userId} onClose={() => setNewOp(false)} onCreated={(id) => { setNewOp(false); reload().then(() => { setFilter({ op: id }); go('resumo') }) }} />}
       {dayClose && <DayClose ops={actionOps} data={data} onClose={() => setDayClose(false)} onSaved={() => { setDayClose(false); reload(); setToast('Balanço salvo.') }} />}
       {quickExp && <QuickExpense ops={actionOps} data={data} defaultOp={current?.id} onClose={() => setQuickExp(false)} onSaved={() => { setQuickExp(false); reload(); setToast('Despesa lançada.') }} />}
+      {adSpend && <AdSpend ops={actionOps} data={data} defaultOp={current?.id} onClose={() => setAdSpend(false)} onSaved={() => { setAdSpend(false); reload(); setToast('Gasto salvo.') }} />}
       {pwd && <ChangePassword onClose={() => setPwd(false)} />}
       {settings && ops.find((o) => o.id === settings) && (
         <Settings op={ops.find((o) => o.id === settings)!} members={data.members} isOwner={roleOf(settings) === 'owner'} canEdit={canEditOp(settings)}
