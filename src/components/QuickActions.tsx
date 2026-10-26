@@ -17,6 +17,8 @@ export function DayClose({ ops, data, onClose, onSaved }: { ops: Operation[]; da
   const [day, setDay] = useState(yesterday())
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  // operação que já recebe vendas do Zap Data: o retorno vem dos comprovantes e não é digitado
+  const autoRevenue = (opId: string) => data.sales.some((x) => x.operation_id === opId)
   const dailyCats = (opId: string) => data.categories.filter((c) => c.operation_id === opId && c.kind === 'manual' && c.show_in_daily)
 
   // valores já gravados no dia escolhido, pra editar em cima
@@ -44,11 +46,13 @@ export function DayClose({ ops, data, onClose, onSaved }: { ops: Operation[]; da
     for (const o of ops) {
       const exists = data.entries.some((x) => x.operation_id === o.id && x.day === day)
       const sales = val(`${o.id}:sales`)
-      const r = await saveEntry(o.id, day, {
-        ad_spend: parseMoney(val(`${o.id}:spend`)),
-        revenue: parseMoney(val(`${o.id}:revenue`)),
-        sales_count: sales === '' ? null : Number(sales),
-      }, exists)
+      const r = await saveEntry(o.id, day, autoRevenue(o.id)
+        ? { ad_spend: parseMoney(val(`${o.id}:spend`)) }
+        : {
+            ad_spend: parseMoney(val(`${o.id}:spend`)),
+            revenue: parseMoney(val(`${o.id}:revenue`)),
+            sales_count: sales === '' ? null : Number(sales),
+          }, exists)
       if (r.error) { setErr(`${o.name}: ${r.error.message}`); setBusy(false); return }
       for (const c of dailyCats(o.id)) {
         const r2 = await setDailyExpense(o.id, c.id, day, parseMoney(val(`${o.id}:${c.id}`)), data.expenses)
@@ -76,8 +80,8 @@ export function DayClose({ ops, data, onClose, onSaved }: { ops: Operation[]; da
             </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <Field label="Gasto tráfego (sem imposto)" value={val(`${o.id}:spend`)} onChange={(v) => set(`${o.id}:spend`, v)} />
-              <Field label="Retorno" value={val(`${o.id}:revenue`)} onChange={(v) => set(`${o.id}:revenue`, v)} />
-              <Field label="Vendas (qtd)" value={val(`${o.id}:sales`)} onChange={(v) => set(`${o.id}:sales`, v.replace(/\D/g, ''))} numeric />
+              <Field label={autoRevenue(o.id) ? 'Retorno (automático)' : 'Retorno'} value={val(`${o.id}:revenue`)} onChange={(v) => set(`${o.id}:revenue`, v)} disabled={autoRevenue(o.id)} />
+              <Field label={autoRevenue(o.id) ? 'Vendas (automático)' : 'Vendas (qtd)'} value={val(`${o.id}:sales`)} onChange={(v) => set(`${o.id}:sales`, v.replace(/\D/g, ''))} numeric disabled={autoRevenue(o.id)} />
               {dailyCats(o.id).map((c) => (
                 <Field key={c.id} label={`${c.name} (pago)`} value={val(`${o.id}:${c.id}`)} onChange={(v) => set(`${o.id}:${c.id}`, v)} />
               ))}
@@ -91,11 +95,11 @@ export function DayClose({ ops, data, onClose, onSaved }: { ops: Operation[]; da
   )
 }
 
-function Field({ label, value, onChange, numeric }: { label: string; value: string; onChange: (v: string) => void; numeric?: boolean }) {
+function Field({ label, value, onChange, numeric, disabled }: { label: string; value: string; onChange: (v: string) => void; numeric?: boolean; disabled?: boolean }) {
   return (
     <div>
       <label className="label">{label}</label>
-      <input className="input text-right tabular-nums" inputMode={numeric ? 'numeric' : 'decimal'} placeholder={numeric ? '—' : '0,00'} value={value} onChange={(e) => onChange(e.target.value)} />
+      <input className="input text-right tabular-nums" inputMode={numeric ? 'numeric' : 'decimal'} placeholder={numeric ? '—' : '0,00'} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
     </div>
   )
 }
