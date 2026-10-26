@@ -2,13 +2,14 @@ import { Copy, Trash2, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 import { SUPABASE_URL, supabase } from '../lib/supabase'
 import type { Member, Operation, Role } from '../lib/types'
+import MetaConnect from './MetaConnect'
 import { Modal } from './ui'
 
 const ROLES: Record<Role, string> = { owner: 'Dono', editor: 'Edita', viewer: 'Só vê' }
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#8b5cf6', '#84cc16']
 
-export default function Settings({ op, members, isOwner, onClose, onChanged, onDeleted }: {
-  op: Operation; members: Member[]; isOwner: boolean; onClose: () => void; onChanged: () => void; onDeleted: () => void
+export default function Settings({ op, members, isOwner, canEdit, onClose, onChanged, onDeleted }: {
+  op: Operation; members: Member[]; isOwner: boolean; canEdit: boolean; onClose: () => void; onChanged: () => void; onDeleted: () => void
 }) {
   const [name, setName] = useState(op.name)
   const [err, setErr] = useState<string | null>(null)
@@ -89,6 +90,8 @@ export default function Settings({ op, members, isOwner, onClose, onChanged, onD
             </form>
           )}
         </div>
+
+        <MetaConnect opId={op.id} canEdit={canEdit} onSynced={onChanged} />
 
         <div>
           <p className="mb-1 text-sm font-semibold">Registrar vendas automaticamente (Zap Data)</p>

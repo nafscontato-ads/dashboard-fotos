@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { ClipboardList, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Plus, Receipt, Settings as Gear, Sun, X } from 'lucide-react'
+import { ClipboardList, KeyRound, RefreshCw, LayoutDashboard, LogOut, Menu, Moon, Plus, Receipt, Settings as Gear, Sun, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import DailyChart from './components/Chart'
 import DailyTable from './components/DailyTable'
@@ -49,6 +49,8 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
   const [settings, setSettings] = useState(false)
   const [dayClose, setDayClose] = useState(false)
   const [quickExp, setQuickExp] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
 
   useEffect(() => store('view', view), [view])
   useEffect(() => store('preset', preset), [preset])
@@ -89,6 +91,21 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
   const go = (v: View) => { setView(v); setMenu(false) }
   const editableOps = ops.filter((o) => ['owner', 'editor'].includes(data.members.find((m) => m.operation_id === o.id && m.email.toLowerCase() === email.toLowerCase())?.role ?? ''))
   const actionOps = current ? editableOps.filter((o) => o.id === current.id) : editableOps
+  // puxa o gasto do Meta agora (só operações com o Meta conectado respondem)
+  async function syncMeta() {
+    setSyncing(true)
+    setSyncMsg(null)
+    const parts: string[] = []
+    for (const o of actionOps) {
+      const { data: r } = await supabase.functions.invoke('sincronizar-meta', { body: { operation_id: o.id, days: 2 } })
+      const res = r?.results?.[0]
+      if (res?.ok) parts.push(`${o.name}: atualizado`)
+      else if (res?.erro) parts.push(`${o.name}: ${res.erro}`)
+    }
+    setSyncMsg(parts.length ? parts.join(' · ') : 'Nenhuma operação com o Meta conectado ainda (Configurar / integrações).')
+    setSyncing(false)
+    reload()
+  }
   const catNames = [...new Set(data.categories.filter((c) => scopeOps.some((o) => o.id === c.operation_id)).map((c) => c.name))]
 
   const sidebar = (
@@ -146,11 +163,13 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
           <div className="mb-4 flex flex-wrap gap-2">
             <button className="btn-primary" onClick={() => setDayClose(true)}><ClipboardList size={16} /> Balanço do dia</button>
             <button className="btn-outline" onClick={() => setQuickExp(true)}><Receipt size={16} /> Lançar despesa</button>
+            <button className="btn-outline" disabled={syncing} onClick={syncMeta}><RefreshCw size={16} className={syncing ? 'animate-spin' : ''} /> Atualizar gasto do Meta</button>
             <button className="btn-outline" onClick={() => setNewOp(true)}><Plus size={16} /> Nova operação</button>
-            {current && <button className="btn-outline" onClick={() => setSettings(true)}><Gear size={16} /> Configurar operação</button>}
+            {current && <button className="btn-outline" onClick={() => setSettings(true)}><Gear size={16} /> Configurar / integrações</button>}
           </div>
         )}
 
+        {syncMsg && <p className="mb-3 rounded-xl bg-zinc-100 p-2.5 text-sm dark:bg-zinc-800">{syncMsg}</p>}
         {error && <p className="mb-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">Erro ao carregar: {error}</p>}
 
         {!loading && !ops.length ? (
@@ -206,7 +225,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
       {quickExp && <QuickExpense ops={actionOps} data={data} defaultOp={current?.id} onClose={() => setQuickExp(false)} onSaved={() => { setQuickExp(false); reload() }} />}
       {pwd && <ChangePassword onClose={() => setPwd(false)} />}
       {settings && current && (
-        <Settings op={current} members={data.members} isOwner={role === 'owner'} onClose={() => setSettings(false)} onChanged={reload}
+        <Settings op={current} members={data.members} isOwner={role === 'owner'} canEdit={canEdit} onClose={() => setSettings(false)} onChanged={reload}
           onDeleted={() => { setSettings(false); go({ kind: 'summary' }); reload() }} />
       )}
     </div>
