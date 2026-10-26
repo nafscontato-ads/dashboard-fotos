@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { KeyRound, LayoutDashboard, LogOut, Menu, Moon, Plus, Settings as Gear, Sun, X } from 'lucide-react'
+import { ClipboardList, KeyRound, LayoutDashboard, LogOut, Menu, Moon, Plus, Receipt, Settings as Gear, Sun, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import DailyChart from './components/Chart'
 import DailyTable from './components/DailyTable'
@@ -7,6 +7,7 @@ import Expenses from './components/Expenses'
 import { ExpenseToggles, PeriodPicker, rangeFor, type Preset } from './components/Filters'
 import Kpis from './components/Kpis'
 import Login from './components/Login'
+import { DayClose, QuickExpense } from './components/QuickActions'
 import Sales from './components/Sales'
 import Settings from './components/Settings'
 import { Empty, Modal, Section, tone } from './components/ui'
@@ -46,6 +47,8 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
   const [newOp, setNewOp] = useState(false)
   const [pwd, setPwd] = useState(false)
   const [settings, setSettings] = useState(false)
+  const [dayClose, setDayClose] = useState(false)
+  const [quickExp, setQuickExp] = useState(false)
 
   useEffect(() => store('view', view), [view])
   useEffect(() => store('preset', preset), [preset])
@@ -84,6 +87,9 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
   const role = current && data.members.find((m) => m.operation_id === current.id && m.email.toLowerCase() === email.toLowerCase())?.role
   const canEdit = role === 'owner' || role === 'editor'
   const go = (v: View) => { setView(v); setMenu(false) }
+  const editableOps = ops.filter((o) => ['owner', 'editor'].includes(data.members.find((m) => m.operation_id === o.id && m.email.toLowerCase() === email.toLowerCase())?.role ?? ''))
+  const actionOps = current ? editableOps.filter((o) => o.id === current.id) : editableOps
+  const catNames = [...new Set(data.categories.filter((c) => scopeOps.some((o) => o.id === c.operation_id)).map((c) => c.name))]
 
   const sidebar = (
     <nav className="flex h-full flex-col gap-1 p-3">
@@ -135,8 +141,15 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
             {current && role && <p className="text-xs text-zinc-500">{role === 'viewer' ? 'Você só visualiza' : `Sua parte: ${myShareOf(data.members, current.id, email) * 100}% do lucro`}</p>}
           </div>
           <PeriodPicker preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
-          {current && <button className="btn-outline" onClick={() => setSettings(true)}><Gear size={16} /> <span className="hidden sm:inline">Configurar</span></button>}
         </header>
+        {actionOps.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button className="btn-primary" onClick={() => setDayClose(true)}><ClipboardList size={16} /> Balanço do dia</button>
+            <button className="btn-outline" onClick={() => setQuickExp(true)}><Receipt size={16} /> Lançar despesa</button>
+            <button className="btn-outline" onClick={() => setNewOp(true)}><Plus size={16} /> Nova operação</button>
+            {current && <button className="btn-outline" onClick={() => setSettings(true)}><Gear size={16} /> Configurar operação</button>}
+          </div>
+        )}
 
         {error && <p className="mb-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">Erro ao carregar: {error}</p>}
 
@@ -158,14 +171,14 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
                 })}
               </div>
             )}
-            <ExpenseToggles amounts={allOn.byCategory} disabled={disabled} toggle={toggle} />
+            <ExpenseToggles names={catNames} amounts={allOn.byCategory} disabled={disabled} toggle={toggle} />
             {saved > 0.004 && (
               <p className="rounded-xl bg-amber-50 p-2.5 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
                 Sem as despesas desligadas, o lucro sobe <b>{money(saved)}</b> (de {money(allOn.profit)} para {money(totals.profit)}).
               </p>
             )}
             <Kpis t={totals} showMine={!current || (myShareOf(data.members, current.id, email) < 1)} saved={saved} />
-            <Section title="Dia a dia: investido × retorno × lucro">{rows.length ? <DailyChart rows={rows} /> : <Empty>Sem dados no período.</Empty>}</Section>
+            <Section title="Dia a dia: gasto × retorno × lucro">{rows.length ? <DailyChart rows={rows} /> : <Empty>Sem dados no período.</Empty>}</Section>
 
             {current ? (
               <>
@@ -173,7 +186,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
                   <DailyTable opId={current.id} rows={rows} entries={data.entries} categories={data.categories} expenses={data.expenses} canEdit={canEdit} onChanged={reload} />
                 </Section>
                 <div className="grid gap-4 2xl:grid-cols-2">
-                  <Section title="Despesas (Zap Data, verificado, outras)">
+                  <Section title="Despesas lançadas">
                     <Expenses opId={current.id} categories={data.categories} expenses={data.expenses} range={range} canEdit={canEdit} onChanged={reload} />
                   </Section>
                   <Section title="Vendas registradas pelo Zap Data">
@@ -189,6 +202,8 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
       </main>
 
       {newOp && <NewOperation userId={userId} onClose={() => setNewOp(false)} onCreated={(id) => { setNewOp(false); reload().then(() => go({ kind: 'op', id })) }} />}
+      {dayClose && <DayClose ops={actionOps} data={data} onClose={() => setDayClose(false)} onSaved={() => { setDayClose(false); reload() }} />}
+      {quickExp && <QuickExpense ops={actionOps} data={data} defaultOp={current?.id} onClose={() => setQuickExp(false)} onSaved={() => { setQuickExp(false); reload() }} />}
       {pwd && <ChangePassword onClose={() => setPwd(false)} />}
       {settings && current && (
         <Settings op={current} members={data.members} isOwner={role === 'owner'} onClose={() => setSettings(false)} onChanged={reload}
@@ -212,17 +227,18 @@ function SummaryTables({ ops, data, range, disabled, email, open }: {
     <div className="grid gap-4 2xl:grid-cols-2">
       <Section title="Por operação (período escolhido)">
         <div className="-mx-4 overflow-x-auto sm:mx-0">
-          <table className="w-full min-w-[560px] text-sm">
+          <table className="w-full min-w-[680px] text-sm">
             <thead><tr className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
-              <th className="px-2 py-2 text-left font-medium">Operação</th><th className={th}>Investido</th><th className={th}>Retorno</th><th className={th}>Despesas</th><th className={th}>Lucro</th><th className={th}>ROAS</th><th className={th}>Minha parte</th>
+              <th className="px-2 py-2 text-left font-medium">Operação</th><th className={th}>Gasto tráfego</th><th className={th}>Imposto Meta</th><th className={th}>Retorno</th><th className={th}>Outras despesas</th><th className={th}>Lucro</th><th className={th}>ROAS</th><th className={th}>Minha parte</th>
             </tr></thead>
             <tbody>
               {perOp.map(({ o, t, share }) => (
                 <tr key={o.id} className="cursor-pointer border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40" onClick={() => open(o.id)}>
                   <td className="px-2 py-2"><span className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: o.color }} /><span className="truncate">{o.name}</span></span></td>
                   <td className="px-2 text-right tabular-nums">{money(t.spend)}</td>
+                  <td className="px-2 text-right tabular-nums">{money(t.tax)}</td>
                   <td className="px-2 text-right tabular-nums">{money(t.revenue)}</td>
-                  <td className="px-2 text-right tabular-nums">{money(t.expenses)}</td>
+                  <td className="px-2 text-right tabular-nums">{money(t.expenses - (t.taxOn ? t.tax : 0))}</td>
                   <td className={`px-2 text-right font-medium tabular-nums ${tone(t.profit)}`}>{money(t.profit)}</td>
                   <td className="px-2 text-right tabular-nums">{ratio(t.spend ? t.revenue / t.spend : NaN)}</td>
                   <td className={`px-2 text-right tabular-nums ${tone(t.profit * share)}`}>{money(t.profit * share)} <span className="text-xs text-zinc-500">({share * 100}%)</span></td>
@@ -235,9 +251,9 @@ function SummaryTables({ ops, data, range, disabled, email, open }: {
       <Section title="Mês a mês (operações marcadas)">
         {!months.length ? <Empty>Sem dados.</Empty> : (
           <div className="-mx-4 overflow-x-auto sm:mx-0">
-            <table className="w-full min-w-[480px] text-sm">
+            <table className="w-full min-w-[600px] text-sm">
               <thead><tr className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
-                <th className="px-2 py-2 text-left font-medium">Mês</th><th className={th}>Investido</th><th className={th}>Retorno</th><th className={th}>Despesas</th><th className={th}>Lucro líquido</th><th className={th}>Margem</th>
+                <th className="px-2 py-2 text-left font-medium">Mês</th><th className={th}>Gasto tráfego</th><th className={th}>Imposto Meta</th><th className={th}>Retorno</th><th className={th}>Outras despesas</th><th className={th}>Lucro líquido</th><th className={th}>Margem</th>
               </tr></thead>
               <tbody>
                 {months.map(([m, rs]) => {
@@ -246,8 +262,9 @@ function SummaryTables({ ops, data, range, disabled, email, open }: {
                     <tr key={m} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/60">
                       <td className="px-2 py-2 font-medium">{monthLabel(m)}</td>
                       <td className="px-2 text-right tabular-nums">{money(t.spend)}</td>
+                      <td className="px-2 text-right tabular-nums">{money(t.tax)}</td>
                       <td className="px-2 text-right tabular-nums">{money(t.revenue)}</td>
-                      <td className="px-2 text-right tabular-nums">{money(t.expenses)}</td>
+                      <td className="px-2 text-right tabular-nums">{money(t.expenses - (t.taxOn ? t.tax : 0))}</td>
                       <td className={`px-2 text-right font-medium tabular-nums ${tone(t.profit)}`}>{money(t.profit)}</td>
                       <td className="px-2 text-right tabular-nums">{pct(t.revenue ? t.profit / t.revenue : NaN)}</td>
                     </tr>

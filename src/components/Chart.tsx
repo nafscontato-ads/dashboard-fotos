@@ -20,7 +20,7 @@ export default function DailyChart({ rows }: { rows: DayRow[] }) {
             cursor={{ fill: dark ? '#ffffff0d' : '#0000000a' }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
-          <Bar dataKey="spend" name="Investido" fill="#a1a1aa" radius={[4, 4, 0, 0]} maxBarSize={18} />
+          <Bar dataKey="spend" name="Gasto tráfego" fill="#a1a1aa" radius={[4, 4, 0, 0]} maxBarSize={18} />
           <Bar dataKey="revenue" name="Retorno" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={18} />
           <Line dataKey="profit" name="Lucro líquido" stroke="#10b981" strokeWidth={2.5} dot={false} type="monotone" />
         </ComposedChart>

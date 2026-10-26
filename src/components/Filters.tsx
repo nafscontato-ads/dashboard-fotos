@@ -7,8 +7,8 @@ export type Preset = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'lastmonth
 export const PRESETS: { id: Preset; label: string }[] = [
   { id: 'today', label: 'Hoje' },
   { id: 'yesterday', label: 'Ontem' },
-  { id: '7d', label: '7 dias' },
-  { id: '30d', label: '30 dias' },
+  { id: '7d', label: 'Últimos 7 dias' },
+  { id: '30d', label: 'Últimos 30 dias' },
   { id: 'month', label: 'Este mês' },
   { id: 'lastmonth', label: 'Mês passado' },
   { id: 'all', label: 'Tudo' },
@@ -21,8 +21,9 @@ export function rangeFor(p: Preset, custom: Range): Range {
   switch (p) {
     case 'today': return { from: d(0), to: d(0) }
     case 'yesterday': return { from: d(-1), to: d(-1) }
-    case '7d': return { from: d(-6), to: d(0) }
-    case '30d': return { from: d(-29), to: d(0) }
+    // igual ao Gerenciador do Meta: não conta o dia de hoje
+    case '7d': return { from: d(-7), to: d(-1) }
+    case '30d': return { from: d(-30), to: d(-1) }
     case 'month': return { from: toISO(new Date(now.getFullYear(), now.getMonth(), 1)), to: d(0) }
     case 'lastmonth': return {
       from: toISO(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
@@ -53,10 +54,10 @@ export function PeriodPicker({ preset, setPreset, custom, setCustom }: {
 }
 
 /** Liga/desliga cada despesa para ver o lucro com e sem ela. */
-export function ExpenseToggles({ amounts, disabled, toggle }: {
-  amounts: Record<string, number>; disabled: Set<string>; toggle: (name: string) => void
+export function ExpenseToggles({ names: all, amounts, disabled, toggle }: {
+  names: string[]; amounts: Record<string, number>; disabled: Set<string>; toggle: (name: string) => void
 }) {
-  const names = Object.keys(amounts).sort()
+  const names = [...new Set([...all, ...Object.keys(amounts)])]
   if (!names.length) return null
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -75,7 +76,7 @@ export function ExpenseToggles({ amounts, disabled, toggle }: {
             <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${on ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-zinc-400'}`}>
               {on && <Check size={10} strokeWidth={3} />}
             </span>
-            {n} · {money(amounts[n])}
+            {n} · {money(amounts[n] ?? 0)}
           </button>
         )
       })}

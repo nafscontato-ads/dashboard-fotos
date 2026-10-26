@@ -2,6 +2,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import type { DayRow } from '../lib/calc'
 import { dayLabel, money, parseMoney, ratio, todayISO } from '../lib/format'
+import { saveEntry as saveEntryM, setDailyExpense } from '../lib/mutations'
 import { supabase } from '../lib/supabase'
 import type { DailyEntry, Expense, ExpenseCategory } from '../lib/types'
 import { Empty, tone } from './ui'
@@ -75,21 +76,8 @@ export default function DailyTable({ opId, rows, entries, categories, expenses, 
     onChanged()
   }
 
-  const saveEntry = (day: string, patch: Partial<DailyEntry>) =>
-    run(supabase.from('daily_entries').upsert(
-      { operation_id: opId, day, ...(entryOf(day) ? {} : { ad_spend: 0, revenue: 0 }), ...patch, updated_at: new Date().toISOString() },
-      { onConflict: 'operation_id,day' },
-    ))
-
-  const saveDailyExpense = async (day: string, cat: ExpenseCategory, amount: number) => {
-    const existing = expenses.filter((x) => x.category_id === cat.id && x.day === day)
-    if (existing.length === 1 && amount > 0) {
-      return run(supabase.from('expenses').update({ amount }).eq('id', existing[0].id))
-    }
-    if (existing.length) await supabase.from('expenses').delete().in('id', existing.map((x) => x.id))
-    if (amount > 0) return run(supabase.from('expenses').insert({ operation_id: opId, category_id: cat.id, day, amount }))
-    onChanged()
-  }
+  const saveEntry = (day: string, patch: Partial<DailyEntry>) => run(saveEntryM(opId, day, patch, !!entryOf(day)))
+  const saveDailyExpense = (day: string, cat: ExpenseCategory, amount: number) => run(setDailyExpense(opId, cat.id, day, amount, expenses))
 
   const removeDay = async (day: string) => {
     if (!confirm(`Apagar o lançamento de ${dayLabel(day)}? (despesas do dia também)`)) return
@@ -119,7 +107,7 @@ export default function DailyTable({ opId, rows, entries, categories, expenses, 
             <thead>
               <tr className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
                 <th className="px-2 py-2 text-left font-medium">Dia</th>
-                <th className="px-2 py-2 text-right font-medium">Investido</th>
+                <th className="px-2 py-2 text-right font-medium">Gasto tráfego</th>
                 <th className="px-2 py-2 text-right font-medium">Retorno</th>
                 <th className="px-2 py-2 text-right font-medium">Vendas</th>
                 {dailyCats.map((c) => <th key={c.id} className="px-2 py-2 text-right font-medium">{c.name}</th>)}

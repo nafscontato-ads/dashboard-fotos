@@ -8,6 +8,7 @@ export interface DayRow {
   revenue: number
   sales: number | null
   byCategory: Record<string, number> // nome da categoria -> valor
+  tax: number // imposto Meta (categorias em % sobre o gasto), ligado ou não
   expenses: number // só as despesas ligadas
   profit: number // lucro líquido com as despesas ligadas
 }
@@ -19,7 +20,9 @@ export interface Totals {
   hasSales: boolean
   expenses: number
   byCategory: Record<string, number>
-  grossProfit: number // retorno - investido
+  tax: number
+  taxOn: boolean
+  grossProfit: number // retorno - gasto
   profit: number // lucro líquido
   myProfit: number
   days: number
@@ -46,7 +49,7 @@ export function computeDays(
   const row = (day: string) => {
     let r = rows.get(day)
     if (!r) {
-      r = { day, spend: 0, revenue: 0, sales: null, byCategory: {}, expenses: 0, profit: 0 }
+      r = { day, spend: 0, revenue: 0, sales: null, byCategory: {}, tax: 0, expenses: 0, profit: 0 }
       rows.set(day, r)
     }
     return r
@@ -62,6 +65,7 @@ export function computeDays(
       if (c.operation_id !== e.operation_id || c.kind !== 'percent_spend') continue
       const v = (Number(e.ad_spend) * Number(c.rate ?? 0)) / 100
       r.byCategory[c.name] = (r.byCategory[c.name] ?? 0) + v
+      r.tax += v
     }
   }
   for (const x of expenses) {
@@ -78,18 +82,20 @@ export function computeDays(
   return [...rows.values()].sort((a, b) => a.day.localeCompare(b.day))
 }
 
-export function totalsOf(rows: DayRow[], disabled: Set<string>, myShare = 1): Totals {
+export function totalsOf(rows: DayRow[], disabled: Set<string>, myShare = 1, taxNames: string[] = ['Imposto Meta']): Totals {
   const t: Totals = {
-    spend: 0, revenue: 0, sales: 0, hasSales: false, expenses: 0, byCategory: {},
+    spend: 0, revenue: 0, sales: 0, hasSales: false, expenses: 0, byCategory: {}, tax: 0, taxOn: true,
     grossProfit: 0, profit: 0, myProfit: 0, days: rows.length,
   }
   for (const r of rows) {
     t.spend += r.spend
     t.revenue += r.revenue
+    t.tax += r.tax
     if (r.sales != null) { t.sales += r.sales; t.hasSales = true }
     for (const [k, v] of Object.entries(r.byCategory)) t.byCategory[k] = (t.byCategory[k] ?? 0) + v
   }
   t.expenses = Object.entries(t.byCategory).reduce((s, [k, v]) => (disabled.has(k) ? s : s + v), 0)
+  t.taxOn = !taxNames.some((n) => disabled.has(n))
   t.grossProfit = t.revenue - t.spend
   t.profit = t.grossProfit - t.expenses
   t.myProfit = t.profit * myShare
