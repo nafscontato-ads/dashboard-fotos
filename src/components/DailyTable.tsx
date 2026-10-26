@@ -90,16 +90,6 @@ export default function DailyTable({ opId, rows, entries, categories, expenses, 
 
   return (
     <div>
-      {canEdit && (
-        <div className="mb-3 flex flex-wrap items-end gap-2">
-          <div>
-            <label className="label">Lançar dia</label>
-            <input type="date" className="input w-auto" value={newDay} onChange={(e) => setNewDay(e.target.value)} />
-          </div>
-          <button className="btn-primary" onClick={() => saveEntry(newDay, {})}><Plus size={16} /> Adicionar dia</button>
-          <p className="text-xs text-zinc-500">Depois é só clicar nos valores da tabela pra editar.</p>
-        </div>
-      )}
       {err && <p className="mb-2 text-sm text-rose-600">{err}</p>}
       {!rows.length ? <Empty>Nenhum lançamento nesse período.</Empty> : (
         <div className="-mx-4 overflow-x-auto sm:mx-0">
@@ -144,6 +134,15 @@ export default function DailyTable({ opId, rows, entries, categories, expenses, 
               })}
             </tbody>
           </table>
+        </div>
+      )}
+      {canEdit && (
+        <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-zinc-100 pt-3 dark:border-line-dark">
+          <div>
+            <label className="label">Falta algum dia na lista? Adicione aqui</label>
+            <input type="date" className="input w-auto" value={newDay} onChange={(e) => setNewDay(e.target.value)} />
+          </div>
+          <button className="btn-primary" onClick={() => saveEntry(newDay, {})}><Plus size={16} /> Adicionar dia</button>
         </div>
       )}
     </div>
