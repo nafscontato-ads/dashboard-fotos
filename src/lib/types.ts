@@ -53,4 +53,15 @@ export interface Sale {
   paid_at: string
   payer_name: string | null
   source: string
+  product_id?: string | null
+}
+
+export interface Product {
+  id: string
+  operation_id: string
+  name: string
+  price: number
+  promo_price: number | null
+  active: boolean
+  sort: number
 }

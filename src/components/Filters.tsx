@@ -1,6 +1,8 @@
-import { Check } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import type { Range } from '../lib/calc'
 import { money, toISO } from '../lib/format'
+import type { Operation } from '../lib/types'
+import { Switch } from './ui'
 
 export type Preset = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'lastmonth' | 'all' | 'custom'
 
@@ -34,22 +36,83 @@ export function rangeFor(p: Preset, custom: Range): Range {
   }
 }
 
-export function PeriodPicker({ preset, setPreset, custom, setCustom }: {
-  preset: Preset; setPreset: (p: Preset) => void; custom: Range; setCustom: (r: Range) => void
+export interface FilterState {
+  preset: Preset
+  custom: Range
+  op: string // 'all' ou id da operação
+  product: string // 'all' ou nome do pacote
+}
+
+function ago(d: Date | null, now: number) {
+  if (!d) return 'Carregando…'
+  const s = Math.round((now - d.getTime()) / 1000)
+  if (s < 60) return 'Atualizado agora mesmo'
+  const m = Math.round(s / 60)
+  return `Atualizado há ${m} min`
+}
+
+/** Cartão de filtros do topo, no jeito da UTMify: período, operação e pacote. */
+export function FilterCard({ title, f, set, ops, products, updatedAt, now, refreshing, onRefresh, allowAllOps = true, showProduct = true }: {
+  title: string
+  f: FilterState
+  set: (patch: Partial<FilterState>) => void
+  ops: Operation[]
+  products: string[]
+  updatedAt: Date | null
+  now: number
+  refreshing: boolean
+  onRefresh: () => void
+  allowAllOps?: boolean
+  showProduct?: boolean
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <select className="input w-auto" value={preset} onChange={(e) => setPreset(e.target.value as Preset)}>
-        {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-      </select>
-      {preset === 'custom' && (
-        <>
-          <input type="date" className="input w-auto" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
-          <span className="text-xs text-zinc-500">até</span>
-          <input type="date" className="input w-auto" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
-        </>
-      )}
-    </div>
+    <section className="card p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-200 pb-3 dark:border-line-dark">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold sm:text-2xl">{title}</h2>
+          <p className="text-[13px] text-zinc-500 dark:text-zinc-400">{ago(updatedAt, now)}</p>
+        </div>
+        <button className="btn-primary h-10 shrink-0 px-5" disabled={refreshing} onClick={onRefresh}>
+          <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} /> Atualizar
+        </button>
+      </div>
+      <div className={`mt-3 grid grid-cols-2 gap-3 ${showProduct ? 'lg:grid-cols-3' : ''}`}>
+        <div>
+          <label className="label">Período</label>
+          <select className="input" value={f.preset} onChange={(e) => set({ preset: e.target.value as Preset })}>
+            {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Operação</label>
+          <select className="input" value={f.op} onChange={(e) => set({ op: e.target.value })}>
+            {allowAllOps && <option value="all">Todas</option>}
+            {ops.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        </div>
+        {showProduct && (
+          <div className="col-span-2 lg:col-span-1">
+            <label className="label">Pacotes</label>
+            <select className="input" value={f.product} onChange={(e) => set({ product: e.target.value })}>
+              <option value="all">Qualquer</option>
+              {products.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+        )}
+        {f.preset === 'custom' && (
+          <>
+            <div>
+              <label className="label">De</label>
+              <input type="date" className="input" value={f.custom.from} onChange={(e) => set({ custom: { ...f.custom, from: e.target.value } })} />
+            </div>
+            <div>
+              <label className="label">Até</label>
+              <input type="date" className="input" value={f.custom.to} onChange={(e) => set({ custom: { ...f.custom, to: e.target.value } })} />
+            </div>
+          </>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -60,26 +123,19 @@ export function ExpenseToggles({ names: all, amounts, disabled, toggle }: {
   const names = [...new Set([...all, ...Object.keys(amounts)])]
   if (!names.length) return null
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-medium text-zinc-500">Despesas na conta:</span>
+    <ul className="divide-y divide-zinc-100 dark:divide-line-dark">
       {names.map((n) => {
         const on = !disabled.has(n)
         return (
-          <button
-            key={n}
-            onClick={() => toggle(n)}
-            title={on ? 'Clique para desligar e ver o lucro sem essa despesa' : 'Desligada: clique para voltar a contar'}
-            className={`chip ${on
-              ? 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300'
-              : 'border-zinc-200 bg-transparent text-zinc-400 line-through dark:border-zinc-700'}`}
-          >
-            <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${on ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-zinc-400'}`}>
-              {on && <Check size={10} strokeWidth={3} />}
-            </span>
-            {n} · {money(amounts[n] ?? 0)}
-          </button>
+          <li key={n} className="flex items-center gap-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className={`truncate text-sm font-medium ${on ? '' : 'text-zinc-400 line-through'}`}>{n}</p>
+              <p className="text-xs text-zinc-500">{money(amounts[n] ?? 0)} no período</p>
+            </div>
+            <Switch on={on} onChange={() => toggle(n)} label={n} />
+          </li>
         )
       })}
-    </div>
+    </ul>
   )
 }
