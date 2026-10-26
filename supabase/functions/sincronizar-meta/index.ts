@@ -78,7 +78,8 @@ Deno.serve(async (req) => {
         const spend = Math.round((byDay[day] ?? 0) * 100) / 100
         const { data: cur } = await db.from('daily_entries').select('id').eq('operation_id', c.operation_id).eq('day', day).maybeSingle()
         if (cur) await db.from('daily_entries').update({ ad_spend: spend, updated_at: new Date().toISOString() }).eq('id', cur.id)
-        else if (spend > 0) await db.from('daily_entries').insert({ operation_id: c.operation_id, day, ad_spend: spend, revenue: 0 })
+        // dia novo só é criado pra hoje/ontem; no "puxar 30 dias" só corrige dias que já existem
+        else if (spend > 0 && i < 2) await db.from('daily_entries').insert({ operation_id: c.operation_id, day, ad_spend: spend, revenue: 0 })
       }
       const total = Object.values(byDay).reduce((s, v) => s + v, 0)
       await db.from('meta_connections').update({ last_sync_at: new Date().toISOString(), last_error: null, last_result: { since, until, total, byDay } }).eq('operation_id', c.operation_id)

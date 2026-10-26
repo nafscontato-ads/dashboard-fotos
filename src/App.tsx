@@ -46,7 +46,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
   const [menu, setMenu] = useState(false)
   const [newOp, setNewOp] = useState(false)
   const [pwd, setPwd] = useState(false)
-  const [settings, setSettings] = useState(false)
+  const [settings, setSettings] = useState<string | null>(null)
   const [dayClose, setDayClose] = useState(false)
   const [quickExp, setQuickExp] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -89,6 +89,8 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
   const role = current && data.members.find((m) => m.operation_id === current.id && m.email.toLowerCase() === email.toLowerCase())?.role
   const canEdit = role === 'owner' || role === 'editor'
   const go = (v: View) => { setView(v); setMenu(false) }
+  const roleOf = (opId: string) => data.members.find((m) => m.operation_id === opId && m.email.toLowerCase() === email.toLowerCase())?.role
+  const settingsOp = settings ? ops.find((o) => o.id === settings) : undefined
   const editableOps = ops.filter((o) => ['owner', 'editor'].includes(data.members.find((m) => m.operation_id === o.id && m.email.toLowerCase() === email.toLowerCase())?.role ?? ''))
   const actionOps = current ? editableOps.filter((o) => o.id === current.id) : editableOps
   // puxa o gasto do Meta agora (só operações com o Meta conectado respondem)
@@ -132,6 +134,13 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
       <button className="btn-ghost justify-start text-indigo-600 dark:text-indigo-400" onClick={() => { setNewOp(true); setMenu(false) }}>
         <Plus size={16} /> Nova operação
       </button>
+      <p className="mt-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Integrações (Meta, Zap Data, sócios)</p>
+      {ops.map((o) => (
+        <button key={o.id} className="btn-ghost justify-start text-left" onClick={() => { setSettings(o.id); setMenu(false) }}>
+          <Gear size={15} className="shrink-0" />
+          <span className="truncate">{o.name}</span>
+        </button>
+      ))}
       <div className="mt-auto space-y-1 border-t border-zinc-200 pt-3 dark:border-zinc-800">
         <p className="truncate px-3 text-xs text-zinc-500">{email}</p>
         <button className="btn-ghost w-full justify-start" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />} Modo {dark ? 'claro' : 'escuro'}</button>
@@ -165,7 +174,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
             <button className="btn-outline" onClick={() => setQuickExp(true)}><Receipt size={16} /> Lançar despesa</button>
             <button className="btn-outline" disabled={syncing} onClick={syncMeta}><RefreshCw size={16} className={syncing ? 'animate-spin' : ''} /> Atualizar gasto do Meta</button>
             <button className="btn-outline" onClick={() => setNewOp(true)}><Plus size={16} /> Nova operação</button>
-            {current && <button className="btn-outline" onClick={() => setSettings(true)}><Gear size={16} /> Configurar / integrações</button>}
+            {current && <button className="btn-outline" onClick={() => setSettings(current.id)}><Gear size={16} /> Configurar / integrações</button>}
           </div>
         )}
 
@@ -224,9 +233,10 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
       {dayClose && <DayClose ops={actionOps} data={data} onClose={() => setDayClose(false)} onSaved={() => { setDayClose(false); reload() }} />}
       {quickExp && <QuickExpense ops={actionOps} data={data} defaultOp={current?.id} onClose={() => setQuickExp(false)} onSaved={() => { setQuickExp(false); reload() }} />}
       {pwd && <ChangePassword onClose={() => setPwd(false)} />}
-      {settings && current && (
-        <Settings op={current} members={data.members} isOwner={role === 'owner'} canEdit={canEdit} onClose={() => setSettings(false)} onChanged={reload}
-          onDeleted={() => { setSettings(false); go({ kind: 'summary' }); reload() }} />
+      {settingsOp && (
+        <Settings op={settingsOp} members={data.members} isOwner={roleOf(settingsOp.id) === 'owner'} canEdit={['owner', 'editor'].includes(roleOf(settingsOp.id) ?? '')}
+          onClose={() => setSettings(null)} onChanged={reload}
+          onDeleted={() => { setSettings(null); go({ kind: 'summary' }); reload() }} />
       )}
     </div>
   )
