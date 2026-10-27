@@ -49,6 +49,14 @@ export default function App() {
   return <Dashboard email={session.user.email ?? ''} userId={session.user.id} />
 }
 
+// traduz os erros mais comuns do Meta pra algo que dá pra agir
+function metaError(e: string) {
+  if (/API access blocked/i.test(e)) return 'o Meta bloqueou o acesso do app ao token. Lance o gasto à mão (botão Gasto com anúncio) até reconectar.'
+  if (/session has expired|Error validating access token|invalid oauth/i.test(e)) return 'o token do Meta venceu ou foi trocado. Gere um novo e cole em Integrações.'
+  if (/permission|not authorized/i.test(e)) return 'o token não tem permissão nessa conta de anúncios.'
+  return e
+}
+
 function Logo({ size = 32 }: { size?: number }) {
   return (
     <div className="flex shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white" style={{ width: size, height: size }}>
@@ -132,7 +140,7 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
     for (const o of actionOps) {
       const { data: r } = await supabase.functions.invoke('sincronizar-meta', { body: { operation_id: o.id, days: 2 } })
       const res = r?.results?.[0]
-      if (res && !res.ok) errs.push(`${o.name}: ${res.erro}`)
+      if (res && !res.ok) errs.push(`${o.name}: ${metaError(String(res.erro ?? ''))}`)
     }
     await reload()
     setSyncing(false)
