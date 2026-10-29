@@ -1,4 +1,4 @@
-// Puxa o gasto do Meta Ads (ontem e hoje, ou os últimos N dias) e grava no "Gasto com tráfego" de cada operação conectada.
+// Puxa o gasto do Meta Ads (últimos 7 dias, ou os últimos N dias) e grava no "Gasto com tráfego" de cada operação conectada.
 // Chamado de hora em hora pelo agendador do banco (header x-cron-secret) ou pelo botão "Sincronizar agora" (login do usuário).
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
 
@@ -16,7 +16,7 @@ const spDay = (offset: number) => {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d)
 }
 
-interface Conn { operation_id: string; ad_account_id: string; campaign_filter: string | null; access_token: string }
+interface Conn { operation_id: string; ad_account_id: string; campaign_filter: string | null; access_token: string; sync_from?: string | null }
 
 async function spendByDay(c: Conn, since: string, until: string): Promise<Record<string, number>> {
   const params = new URLSearchParams({
@@ -46,7 +46,8 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   const body = await req.json().catch(() => ({})) as { operation_id?: string; days?: number }
-  const days = Math.min(Math.max(Number(body.days) || 2, 1), 90)
+  // 7 dias por padrão: se o Meta ficar fora do ar uns dias, quando voltar corrige os dias que ficaram pra trás
+  const days = Math.min(Math.max(Number(body.days) || 7, 7), 90)
 
   // quem está chamando: o agendador (segredo) ou um sócio logado
   let only: string | null = null
@@ -62,24 +63,28 @@ Deno.serve(async (req) => {
     only = body.operation_id
   }
 
-  let q = db.from('meta_connections').select('operation_id, ad_account_id, campaign_filter, access_token')
+  let q = db.from('meta_connections').select('*')
   if (only) q = q.eq('operation_id', only)
   const { data: conns, error } = await q
   if (error) return json({ ok: false, erro: error.message }, 500)
 
-  const since = spDay(-(days - 1)), until = spDay(0)
+  const until = spDay(0)
+  const baseSince = spDay(-(days - 1))
   const results = []
   for (const c of (conns ?? []) as Conn[]) {
     try {
+      const since = c.sync_from && c.sync_from > baseSince ? c.sync_from : baseSince
       const byDay = await spendByDay(c, since, until)
       // dias sem gasto no período viram zero, pra não ficar valor velho
       for (let i = days - 1; i >= 0; i--) {
         const day = spDay(-i)
+        // dias antes da conta atual (ex.: operação que mudou de BM) ficam com o gasto já lançado
+        if (c.sync_from && day < c.sync_from) continue
         const spend = Math.round((byDay[day] ?? 0) * 100) / 100
         const { data: cur } = await db.from('daily_entries').select('id').eq('operation_id', c.operation_id).eq('day', day).maybeSingle()
         if (cur) await db.from('daily_entries').update({ ad_spend: spend, updated_at: new Date().toISOString() }).eq('id', cur.id)
-        // dia novo só é criado pra hoje/ontem; no "puxar 30 dias" só corrige dias que já existem
-        else if (spend > 0 && i < 2) await db.from('daily_entries').insert({ operation_id: c.operation_id, day, ad_spend: spend, revenue: 0 })
+        // dia novo só é criado nos últimos 7 dias; no "puxar 30 dias" só corrige dias que já existem
+        else if (spend > 0 && i < 7) await db.from('daily_entries').insert({ operation_id: c.operation_id, day, ad_spend: spend, revenue: 0 })
       }
       const total = Object.values(byDay).reduce((s, v) => s + v, 0)
       await db.from('meta_connections').update({ last_sync_at: new Date().toISOString(), last_error: null, last_result: { since, until, total, byDay } }).eq('operation_id', c.operation_id)
@@ -90,5 +95,5 @@ Deno.serve(async (req) => {
       results.push({ operation_id: c.operation_id, ok: false, erro: msg })
     }
   }
-  return json({ ok: true, since, until, results })
+  return json({ ok: true, since: baseSince, until, results })
 })
